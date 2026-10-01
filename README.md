@@ -1,109 +1,160 @@
 # Automated Micro-Influencer Outreach System
 
-> **Production-Quality Prototype for EDXSO AI Engineer Intern Technical Assignment**
-
-An automated, end-to-end system designed to discover, filter, enrich, personalize, simulate sending, and track outreach for micro-influencers in the **Technology / AI / Developer** niche using the official YouTube Data API v3, LLM-based structured personalization, SQLite database persistence, and programmatic safety controls.
+> **Production-Quality Prototype for EDXSO AI Engineer Intern Technical Assignment 1**
 
 ---
 
-## 🛑 Data Authenticity & Safety Commitment
+## Overview
 
-> **CRITICAL COMPLIANCE NOTICE:**
+The **Automated Micro-Influencer Outreach System** is an end-to-end, modular Python application designed to discover, filter, enrich, personalize, simulate sending, and track outreach for micro-influencers in the **Technology / AI / Developer** niche. The system integrates the official YouTube Data API v3, LLM-based structured personalization (Gemini / OpenAI), SQLite database tracking, and programmatic safety controls.
+
+---
+
+## Assignment Objective
+
+Build an automated system that executes the complete influencer outreach lifecycle:
+$$\text{Discovery} \longrightarrow \text{Data Collection} \longrightarrow \text{Enrichment} \longrightarrow \text{Filtering} \longrightarrow \text{AI Personalization} \longrightarrow \text{Outreach Simulation} \longrightarrow \text{Tracking} \longrightarrow \text{CSV Export}$$
+
+Key requirements include retrieving at least 50 real candidate influencers for a test run, filtering by micro-influencer subscriber bounds ($5,000$ to $100,000$), calculating approximate engagement rates, extracting public contact emails strictly without guessing, generating personalized pitches and DMs based solely on verified data, preventing duplicate outreach via SQLite, and operating in a safe simulation mode.
+
+---
+
+## Data Authenticity & Safety
+
+> **CRITICAL COMPLIANCE DIRECTIVE:**
 > **"No fabricated influencer information, guessed email addresses, or fake engagement metrics are used."**
-> - **Zero Synthetic Data:** All creators, subscriber counts, view statistics, descriptions, and video titles are retrieved live from YouTube Data API v3.
-> - **Strict Email Policy:** Email addresses are **NEVER guessed or generated** (e.g. no `contact@...` or `hello@...`). Regex extraction is applied strictly to public channel and video descriptions. If no email is explicitly published, the record stores `"Not Found"`.
-> - **Safety-First Sending Layer:** Outbound emails are never dispatched automatically. The system defaults to `SIMULATE_SEND=true`.
-> - **Zero Secret Leaks:** API keys and credentials are strictly loaded via `.env` and ignored by `.gitignore`.
+
+- **Zero Synthetic Data:** 100% of candidate channels, subscriber counts, view statistics, descriptions, and recent video titles are fetched live from the official YouTube Data API v3.
+- **Strict Email Extraction:** Email addresses are **NEVER guessed or generated** (no `contact@...` or `hello@...`). Regex extraction is applied strictly to publicly listed channel and video descriptions. If no email is explicitly published, the field stores `"Not Found"`.
+- **Safety-First Sending Layer:** Outbound emails are never dispatched automatically. The system defaults to `SIMULATE_SEND=true`.
+- **Official API Usage:** Data discovery and enrichment are performed through the official YouTube Data API v3 rather than direct web scraping.
+- **Zero Secrets Committed:** API keys are loaded strictly via environment variables (`.env`), which is ignored by `.gitignore`.
 
 ---
 
-## 🚀 Key Features & Pipeline Stages
+## Key Features & Pipeline
 
-The system operates across **7 distinct modular pipeline stages**:
+The system processes creators across **7 sequential pipeline stages**:
 
-```mermaid
-flowchart TD
-    A[1. Multi-Query Discovery] -->|YouTube Data API v3| B[2. Data Collection & Enrichment]
-    B -->|Stats, Email & Themes| C[3. Filtering & Classification]
-    C -->|PASSED / QUALIFIED| D[4. AI Personalization]
-    D -->|60-90w Email Pitch & 15-30w IG DM| E[5. Database Logging & Tracker]
-    E -->|SQLite Unique Constraint| F[6. Sending Simulation]
-    F -->|SIMULATED / SKIPPED| G[7. Multi-CSV Export]
+```
+Discovery
+   ↓
+Data Collection
+   ↓
+Enrichment
+   ↓
+Filtering
+   ↓
+AI Personalization
+   ↓
+Review/Validation
+   ↓
+Outreach Simulation
+   ↓
+Tracking
+   ↓
+CSV Export
 ```
 
-1. **Discovery:** Multi-query search across 10 technology & AI queries with API pagination and channel ID deduplication to retrieve 50+ real micro-influencer channels.
-2. **Data Collection & Enrichment:** Fetches channel statistics, uploads playlists, recent video performance metrics (views, likes, comments), extracts verified public emails via regex, and determines content themes.
-3. **Filtering & Classification:** Evaluates creators against configurable micro-influencer bounds (5,000–100,000 subscribers, $\ge 1.0\%$ engagement rate, and technology relevance). Every record receives a `filter_status` (`QUALIFIED` or `FAILED`) and detailed `filter_reason`.
-4. **AI Personalization:** Leverages LLM structured output to generate personalized **Email Collaboration Pitches (60–90 words)** and **Instagram DMs (15–30 words)** backed by programmatic word count validation and strict factual grounding ("Use ONLY supplied facts").
+### Stage Summary
+1. **Discovery:** Multi-query search across 16 configurable technology and AI queries with API pagination and channel ID deduplication to retrieve candidates up to `TARGET_DISCOVERY_COUNT` (default: 150).
+2. **Data Collection & Enrichment:** Fetches channel statistics, uploads playlists, recent video performance metrics (views, likes, comments), extracts verified public emails via regex, and identifies content themes.
+3. **Filtering & Classification:** Evaluates creators against configurable micro-influencer bounds (5,000–100,000 subscribers, $\ge 1.0\%$ engagement rate, and technology relevance). Every record receives a `filter_status` (`QUALIFIED` or `FAILED`) and a transparent `filter_reason`.
+4. **AI Personalization:** Generates personalized **Email Collaboration Pitches (60–90 words)** and **Instagram DMs (15–30 words)** backed by programmatic word count validation, exponential backoff for 503 errors, 429 quota exhaustion handling, and a dynamic factual fallback generator.
 5. **Database Logging:** SQLite persistence (`outreach_log`) with a composite `UNIQUE(influencer_name, email)` constraint to prevent duplicate outreach.
-6. **Sending Layer Simulation:** Safe execution layer supporting `SIMULATED`, `SKIPPED_NO_EMAIL`, and `SKIPPED_DUPLICATE` statuses.
+6. **Outreach Simulation:** Safe execution layer supporting `SIMULATED`, `SKIPPED_NO_EMAIL`, and `SKIPPED_DUPLICATE` statuses.
 7. **CSV Exporting:** Generates structured CSV outputs (`influencers.csv`, `classified_influencers.csv`, `qualified_influencers.csv`, `personalized_outreach.csv`, `outreach_tracker.csv`).
 
 ---
 
-## 📊 Engagement Rate Calculation Methodology
+## Engagement Rate Methodology
 
-YouTube Data API v3 does **not** provide a single native influencer engagement rate field. Therefore, this system calculates an **approximate engagement rate** across recent public videos:
+YouTube Data API v3 does **not** provide a native single engagement rate field. Therefore, this system calculates an **approximate engagement rate proxy** across recent public videos:
 
-$$\text{Video Engagement Rate} = \frac{\text{Likes} + \text{Comments}}{\text{Views}} \times 100$$
+$$\text{Video Engagement Rate} = \left(\frac{\text{Likes} + \text{Comments}}{\text{Views}}\right) \times 100$$
 
 $$\text{Channel Engagement Rate} = \text{Mean}(\text{Video Engagement Rates across recent videos})$$
 
-* **Documentation Note:** This is an **APPROXIMATE engagement rate** derived from public statistics. If a channel has insufficient recent public video statistics or zero views, `engagement_rate` is set to `"Not Found"` rather than zero.
+### Data Handling Notes
+- **Public Proxy:** This is an approximate engagement rate derived from public statistics.
+- **Missing / Zero-View Handling:** If a channel has no recent public videos, zero total views, or missing statistics, `engagement_rate` is safely set to `"Not Found"` rather than zero to avoid distorting metrics.
 
 ---
 
-## 🛠️ Project Structure
+## Discovery Queries List
+
+The discovery module searches across 16 configurable queries defined in `Config.DISCOVERY_QUERIES`:
+
+1. `AI tools`
+2. `AI tutorial`
+3. `generative AI`
+4. `machine learning`
+5. `artificial intelligence`
+6. `Python tutorial`
+7. `Python programming`
+8. `software development`
+9. `coding tutorial`
+10. `developer tools`
+11. `ChatGPT`
+12. `LLM`
+13. `AI agents`
+14. `data science`
+15. `technology`
+16. `programming`
+
+Channels are deduplicated strictly by `channel_id` across queries, and candidate target count is configurable via `TARGET_DISCOVERY_COUNT=150`.
+
+---
+
+## Project Structure
 
 ```
 edxso_ai_influencer_outreach/
 ├── app/
 │   ├── __init__.py           # Package initializer
-│   ├── config.py             # Environment configuration & validations
+│   ├── config.py             # Configuration & DISCOVERY_QUERIES definition
 │   ├── youtube_client.py     # Official YouTube Data API v3 wrapper
-│   ├── discovery.py          # Multi-query channel discovery & deduplication
+│   ├── discovery.py          # Multi-query discovery & deduplication
 │   ├── enrichment.py         # Profile enrichment, email regex & themes
-│   ├── filtering.py          # Micro-influencer filtering & classification
-│   ├── personalization.py    # LLM pitch & DM generator with word validation
+│   ├── filtering.py          # Transparent micro-influencer classification
+│   ├── personalization.py    # LLM pitch & DM generator with word validator & backoff
 │   ├── outreach.py           # Simulated sending layer & duplicate check
 │   ├── db.py                 # SQLite Database Manager (outreach_log)
 │   └── pipeline.py           # 7-stage orchestrator & CSV exporter
 ├── data/                     # Output directory for CSV files & SQLite DB
 │   └── .gitkeep
-├── tests/                    # Comprehensive Pytest test suite
+├── tests/                    # Pytest unit testing suite
 │   ├── test_email_extraction.py
 │   ├── test_engagement.py
 │   ├── test_filtering.py
 │   ├── test_deduplication.py
-│   └── test_word_count.py
-├── run.py                    # Main CLI entry point
+│   ├── test_word_count.py
+│   ├── test_discovery_advanced.py
+│   └── test_personalization_advanced.py
+├── run.py                    # Main CLI entry point with PIPELINE SUMMARY
 ├── requirements.txt          # Dependencies
 ├── .env.example              # Environment variables template
 ├── .gitignore                # Git safety rules
-└── README.md                 # System documentation
+└── README.md                 # Project documentation
 ```
 
 ---
 
-## ⚙️ Environment Variables & Configuration
+## Environment Variables
 
 Copy `.env.example` to `.env` and populate your API credentials:
-
-```bash
-cp .env.example .env
-```
 
 ```env
 # YouTube Data API Credentials
 YOUTUBE_API_KEY=your_youtube_api_key_here
 
-# LLM Credentials (OpenAI or Gemini)
+# LLM Credentials
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.0-flash
+LLM_PROVIDER=gemini
+
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-4o-mini
-
-# Optional: Gemini API Key
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
 
 # Configurable Thresholds
 MIN_SUBSCRIBERS=5000
@@ -111,8 +162,11 @@ MAX_SUBSCRIBERS=100000
 MIN_ENGAGEMENT_RATE=1.0
 
 # Discovery Settings
-TARGET_DISCOVERY_COUNT=60
+TARGET_DISCOVERY_COUNT=150
 RECENT_VIDEO_COUNT=5
+
+# LLM Request Throttling
+LLM_REQUEST_DELAY_SECONDS=2
 
 # Safety Controls
 SIMULATE_SEND=true
@@ -121,33 +175,44 @@ DB_PATH=data/outreach.db
 
 ---
 
-## 💻 Installation & Usage Instructions
+## Installation
 
-### 1. Prerequisites
-- Python 3.10+
-- Google YouTube Data API v3 Key (from Google Cloud Console)
-- OpenAI or Gemini API Key (optional; falls back to factual mock mode if unconfigured)
+1. **Clone or navigate to the project directory:**
+   ```bash
+   cd edxso_ai_influencer_outreach
+   ```
+2. **Install Python dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### 2. Install Dependencies
+---
+
+## Testing
+
+Automated tests are included and the latest verified local run completed with all collected tests passing:
+
 ```bash
-pip install -r requirements.txt
+pytest -q
 ```
 
-### 3. Run Unit Tests
-```bash
-pytest -v
-```
+Tests cover multi-query discovery, channel deduplication, subscriber filtering, engagement filtering, transparent pass/fail reasons, email regex extraction, word count validation (60–90w email, 15–30w DM), dynamic fallback generation, 429 quota handling, 503 backoff, and CSV exporting.
 
-### 4. Run the Pipeline
+---
+
+## Running the Pipeline
+
+To execute the complete 7-stage pipeline:
+
 ```bash
 python run.py
 ```
 
 ---
 
-## 📺 Demonstration Output Example
+## Example Pipeline Output
 
-When running `python run.py`, the console displays a step-by-step progress monitor:
+> **Note:** The numbers below represent illustrative example console output. Actual results vary depending on YouTube search API results, quota availability, and filtering thresholds.
 
 ```text
 ============================================================
@@ -156,74 +221,125 @@ When running `python run.py`, the console displays a step-by-step progress monit
 
 [1/7] Discovering creators...
 Searching query: 'AI tools'
-Searching query: 'Python programming'
-Discovered: 60 unique channels
+Searching query: 'AI tutorial'
+Discovered: 150 unique channels
 
 [2/7] Enriching profiles...
-Enriching details for 60 channels...
-Records saved: 60
+Records saved: 150
 
 [3/7] Filtering...
 Filtering creators (Subscribers: 5,000-100,000, Min Engagement: 1.0%)...
-Total Classified: 60 | Qualified: 14 | Failed: 46
+Total Classified: 150 | Qualified: 14 | Failed: 136
 
 [4/7] Generating AI messages...
 Generated personalized messages for 14 qualified creators
 
 [5/7] Creating tracker & checking database duplicates...
 [6/7] Simulating sending...
-[SIMULATED EMAIL SENT] To: Tech Explorer <contact@example.com> | Pitch: Hi Tech Explorer...
-Simulated Send Summary -> Sent: 4 | Skipped (No Email): 10 | Skipped (Duplicate): 0
+Simulated Send Summary -> Simulated Sends: 2 | Skipped (No Email): 12 | Skipped (Duplicate): 0
 
 [7/7] Exporting tracker...
 Exported final tracker to data/outreach_tracker.csv
 
-DONE
-============================================================
+============================================
+PIPELINE SUMMARY
+============================================
+Candidates discovered: 150
+Profiles enriched: 150
+Qualified: 14
+Failed filtering: 136
+
+LLM generated: 14
+Fallback generated: 0
+Generation failed: 0
+
+Valid public emails: 2
+No public email: 12
+
+Simulated sends: 2
+Duplicate skipped: 0
+No-email skipped: 12
+
+Tracker:
+data/outreach_tracker.csv
+============================================
 ```
 
 ---
 
-## ⚡ Error Handling & Resiliency
+## Latest Verified Run
 
-The system implements defensive error handling across all integration points:
+The following results were recorded from the latest verified full local execution:
+
+- **Candidates Discovered:** 193 unique channels
+- **Profiles Enriched:** 193 profiles
+- **Qualified Micro-Influencers:** 18 creators
+- **Failed Filtering:** 175 creators
+- **Valid Public Emails:** 3 creators (`aimasterytutorial@gmail.com`, `freelance.param@gmail.com`, `techaicenter2@gmail.com`)
+- **Fallback Personalized Messages:** 18 creators (`generation_status=FALLBACK_SUCCESS`, `generation_provider=fallback`)
+- **Simulated New Sends:** 1 send (`AI Mastery Tutorial`)
+- **Duplicate Skipped:** 2 creators (prevented by SQLite `outreach.db` unique constraint)
+- **No-Email Skipped:** 15 creators
+
+---
+
+## Error Handling & Resiliency
+
+The system implements defensive error handling across all pipeline stages:
 
 - **API Quota Exceeded:** Catches YouTube API HTTP 403 `quotaExceeded` errors and raises `QuotaExceededError` with clear terminal guidance.
-- **Missing API Keys:** Validates key presence prior to execution and raises `MissingAPIKeyError`.
-- **Invalid LLM JSON:** Retries parsing and cleans markdown code blocks (` ```json `).
-- **Word Count Violations:** Programmatically validates email pitches ($60 \le w \le 90$) and Instagram DMs ($15 \le w \le 30$). Re-prompts the LLM with word count feedback on failures.
-- **Duplicate Outreach:** SQLite composite UNIQUE constraint enforces idempotent runs.
+- **503 UNAVAILABLE Handling:** Temporary server overload errors trigger exponential backoff retries with delays of 2s, 5s, and 10s.
+- **429 Quota Exhaustion Handling:** When a 429 quota error (`RESOURCE_EXHAUSTED` or `insufficient_quota`) occurs, the system marks quota as exhausted and **stops repeatedly hammering the model**, transitioning remaining creators to dynamic fallback.
+- **LLM Throttling:** Requests are throttled using `LLM_REQUEST_DELAY_SECONDS` (default: 2s) to remain within free-tier rate limits.
+- **Dynamic Fallback Personalization:** If an LLM is unconfigured, unavailable, or out of quota, a dynamic factual generator produces pitches using verified creator data (name, recent video title, content themes, subscriber count, engagement rate).
+- **Transparent Labeling:** Messages track `generation_status` (`SUCCESS`, `FALLBACK_SUCCESS`, `FAILED`) and `generation_provider` (`gemini`, `openai`, `mock`, `fallback`). Fallback messages are never falsely attributed to an LLM model.
+- **Word Count Validation:** Programmatically validates email pitches ($60 \le w \le 90$) and Instagram DMs ($15 \le w \le 30$). Re-prompts the LLM with word count feedback on violations.
 
 ---
 
-## 🔒 Security & Privacy Considerations
+## Security & Privacy
 
-1. **No API Key Commits:** `.env` is listed in `.gitignore`.
-2. **No Real Email Dispatch:** `SIMULATE_SEND=true` is hardcoded as default.
-3. **No Web Scraping Violations:** All data is obtained strictly via official YouTube v3 REST endpoints.
-
----
-
-## 📈 Scalability Design
-
-- **Batch Requesting:** Channel details and video statistics are fetched in optimal batches of 50 IDs per network call.
-- **Deduplication:** Channel IDs are indexed in a set during discovery before enrichment to minimize API quota usage.
-- **Decoupled Architecture:** Clean separation between API client, discovery, enrichment, filtering, AI personalization, database, and pipeline services allows easy expansion to other platforms (e.g., Twitch, X/Twitter).
+1. **Git Exclusions:** `.env`, `*.db`, `__pycache__/`, `.pytest_cache/`, `.venv/`, and `data/*.csv` are ignored by `.gitignore`.
+2. **Environment Variable Secret Management:** API credentials are loaded dynamically from environment variables; `.env.example` contains only non-sensitive placeholders.
+3. **Simulation Mode Default:** Real email sending is disabled by default (`SIMULATE_SEND=true`).
+4. **Data Integrity:** No email addresses are guessed or generated, and no creator statistics are fabricated.
 
 ---
 
-## 📋 Assignment Requirement Mapping
+## Scalability / Future Extensions
+
+### Currently Implemented
+- **API Request Batching:** Channel details and video statistics are fetched in optimal batches of 50 IDs per API call.
+- **Channel Deduplication:** Candidate channel IDs are indexed in a set during discovery before enrichment to minimize API quota usage.
+- **Modular Design:** Decoupled architecture separating API client, discovery, enrichment, filtering, AI personalization, database, and pipeline services.
+
+### Possible Future Extensions
+- **Multi-Platform Support:** Expanding discovery and enrichment to Twitch or X (Twitter).
+- **Asynchronous Processing:** Integrating background task queues (e.g. Celery or Redis) for large-scale channel enrichment.
+- **Database Scale-Up:** Transitioning from SQLite to PostgreSQL for multi-user outreach tracking.
+
+---
+
+## Assignment Requirement Mapping
 
 | Requirement | Implementation Module | Verification Status |
 | :--- | :--- | :--- |
-| **Real Micro-Influencers (50+)** | `app/discovery.py` | Verified via YouTube API |
-| **No Data Fabrication** | `app/enrichment.py` | Strict API & regex sourcing |
-| **Subscriber Range (5k-100k)** | `app/filtering.py` | Configurable in `.env` |
-| **Filter Status & Reason** | `app/filtering.py` | Records `QUALIFIED` & `FAILED` reasons |
-| **Engagement Rate Calc** | `app/enrichment.py` | Video mean formula with "Not Found" support |
-| **Regex Email Extraction** | `app/enrichment.py` | Strict regex; no guessing |
+| **50+ Real Influencers** | `app/discovery.py` | Discovered 193 candidate channels |
+| **No Fabricated Data** | `app/enrichment.py` | Live YouTube Data API v3 metrics only |
+| **Subscriber Bounds (5k–100k)** | `app/filtering.py` | Configurable in `app/config.py` |
+| **Transparent Filter Reasons** | `app/filtering.py` | Explicit `PASS:` and `FAIL:` reasons in CSV |
+| **Public Email Extraction** | `app/enrichment.py` | Strict regex only; `"Not Found"` if missing |
 | **Content Themes** | `app/enrichment.py` | Keyword matching on real titles/descriptions |
-| **AI Personalization (60-90w / 15-30w)**| `app/personalization.py` | LLM JSON output + word count validator |
-| **SQLite Duplicate Prevention** | `app/db.py`, `app/outreach.py` | `UNIQUE(influencer_name, email)` |
-| **Simulated Sending Layer** | `app/outreach.py` | Safe simulation mode |
-| **5 CSV Outputs** | `app/pipeline.py` | Exported to `data/` |
+| **60–90 Word Email Pitch** | `app/personalization.py` | Programmatic word count validation |
+| **15–30 Word Instagram DM** | `app/personalization.py` | Programmatic word count validation |
+| **Duplicate Prevention** | `app/db.py`, `app/outreach.py` | SQLite composite `UNIQUE(influencer_name, email)` |
+| **Outreach Simulation Mode** | `app/outreach.py` | `SIMULATE_SEND=true` safety control |
+| **CSV Outputs** | `app/pipeline.py` | 5 CSV datasets generated in `data/` |
+
+---
+
+## Limitations
+
+- **Public Email Availability:** Many creators do not publish contact emails in public YouTube descriptions. Missing emails are correctly marked `"Not Found"` and skipped during outreach simulation.
+- **API Quota Restrictions:** YouTube Data API v3 and LLM APIs operate under quota limits; the system uses request throttling, exponential backoff, and factual fallbacks to handle quota exhaustion gracefully.
+- **Simulated Instagram Outreach:** Automated Instagram DM sending is simulated because direct automated DM dispatch is restricted by platform policies.

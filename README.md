@@ -37,33 +37,29 @@ Key requirements include retrieving at least 50 real candidate influencers for a
 The system processes creators across **7 sequential pipeline stages**:
 
 ```
-Discovery
+1. Discovery
    ↓
-Data Collection
+2. Data Collection & Enrichment
    ↓
-Enrichment
+3. Filtering
    ↓
-Filtering
+4. AI Personalization
    ↓
-AI Personalization
+5. Review / Validation
    ↓
-Review/Validation
+6. Outreach Simulation
    ↓
-Outreach Simulation
-   ↓
-Tracking
-   ↓
-CSV Export
+7. Tracking / CSV Export
 ```
 
 ### Stage Summary
 1. **Discovery:** Multi-query search across 16 configurable technology and AI queries with API pagination and channel ID deduplication to retrieve candidates up to `TARGET_DISCOVERY_COUNT` (default: 150).
 2. **Data Collection & Enrichment:** Fetches channel statistics, uploads playlists, recent video performance metrics (views, likes, comments), extracts verified public emails via regex, and identifies content themes.
-3. **Filtering & Classification:** Evaluates creators against configurable micro-influencer bounds (5,000–100,000 subscribers, $\ge 1.0\%$ engagement rate, and technology relevance). Every record receives a `filter_status` (`QUALIFIED` or `FAILED`) and a transparent `filter_reason`.
+3. **Filtering:** Evaluates creators against configurable micro-influencer bounds (5,000–100,000 subscribers, $\ge 1.0\%$ engagement rate, and technology relevance). Every record receives a `filter_status` (`QUALIFIED` or `FAILED`) and a transparent `filter_reason`.
 4. **AI Personalization:** Generates personalized **Email Collaboration Pitches (60–90 words)** and **Instagram DMs (15–30 words)** backed by programmatic word count validation, exponential backoff for 503 errors, 429 quota exhaustion handling, and a dynamic factual fallback generator.
-5. **Database Logging:** SQLite persistence (`outreach_log`) with a composite `UNIQUE(influencer_name, email)` constraint to prevent duplicate outreach.
-6. **Outreach Simulation:** Safe execution layer supporting `SIMULATED`, `SKIPPED_NO_EMAIL`, and `SKIPPED_DUPLICATE` statuses.
-7. **CSV Exporting:** Generates structured CSV outputs (`influencers.csv`, `classified_influencers.csv`, `qualified_influencers.csv`, `personalized_outreach.csv`, `outreach_tracker.csv`).
+5. **Review / Validation:** Programmatically checks generated message length and factual grounding before output.
+6. **Outreach Simulation:** Safe execution layer checking SQLite database duplicates (`outreach_log`) and recording `SIMULATED`, `SKIPPED_NO_EMAIL`, or `SKIPPED_DUPLICATE` statuses.
+7. **Tracking / CSV Export:** Generates structured CSV outputs (`influencers.csv`, `classified_influencers.csv`, `qualified_influencers.csv`, `personalized_outreach.csv`, `outreach_tracker.csv`) and maintains SQLite outreach log.
 
 ---
 
@@ -71,9 +67,11 @@ CSV Export
 
 YouTube Data API v3 does **not** provide a native single engagement rate field. Therefore, this system calculates an **approximate engagement rate proxy** across recent public videos:
 
-$$\text{Video Engagement Rate} = \left(\frac{\text{Likes} + \text{Comments}}{\text{Views}}\right) \times 100$$
+```text
+Video Engagement Rate = ((Likes + Comments) / Views) × 100
 
-$$\text{Channel Engagement Rate} = \text{Mean}(\text{Video Engagement Rates across recent videos})$$
+Channel Engagement Rate = Mean(Video Engagement Rates across recent videos)
+```
 
 ### Data Handling Notes
 - **Public Proxy:** This is an approximate engagement rate derived from public statistics.

@@ -1,0 +1,32 @@
+﻿services:
+  - type: web
+    name: edxso-ai-influencer-outreach
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app.web:app
+    envVars:
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      - key: MIN_SUBSCRIBERS
+        value: "5000"
+      - key: MAX_SUBSCRIBERS
+        value: "100000"
+      - key: MIN_ENGAGEMENT_RATE
+        value: "1.0"
+      - key: TARGET_DISCOVERY_COUNT
+        value: "150"
+      - key: LLM_REQUEST_DELAY_SECONDS
+        value: "2"
+      - key: SIMULATE_SEND
+        value: "true"
+      - key: DB_PATH
+        value: data/outreach.db

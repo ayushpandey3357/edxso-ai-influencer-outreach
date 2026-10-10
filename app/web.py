@@ -145,19 +145,19 @@ HTML_TEMPLATE = """
                         {% for r in records %}
                         <tr>
                             <td>
-                                <strong>{{ r.Influencer or r.influencer_name }}</strong><br>
+                                <strong>{{ r.Name or r.Influencer or r.influencer_name }}</strong><br>
                                 <a href="{{ r['Profile URL'] }}" target="_blank" style="color: #60a5fa; font-size: 0.8rem;">View Channel</a>
                             </td>
-                            <td>{{ "{:,}".format(r['Follower Count']|int if r['Follower Count'] else 0) }}</td>
+                            <td>{{ "{:,}".format((r.get('Followers') or r.get('Follower Count') or 0)|int) }}</td>
                             <td>{{ r['Engagement Rate'] }}</td>
-                            <td><span style="font-family: monospace;">{{ r['Contact Email'] or r['email'] }}</span></td>
-                            <td style="max-width: 320px; line-height: 1.4;">{{ r['Email Pitch'] or r['message_generated'] }}</td>
-                            <td style="max-width: 220px; line-height: 1.4;">{{ r['Instagram DM'] }}</td>
+                            <td><span style="font-family: monospace;">{{ r.get('Email') or r.get('Contact Email') or r.get('email') }}</span></td>
+                            <td style="max-width: 320px; line-height: 1.4;">{{ r.get('Email Pitch') or r.get('message_generated') }}</td>
+                            <td style="max-width: 220px; line-height: 1.4;">{{ r.get('Instagram DM') }}</td>
                             <td>
-                                {% set st = r['Status'] or r['status'] %}
+                                {% set st = r.get('Sending Status') or r.get('Status') or r.get('status') %}
                                 {% if st == 'SIMULATED' %}
                                     <span class="badge badge-simulated">SIMULATED</span>
-                                {% elif 'DUPLICATE' in st %}
+                                {% elif st and 'DUPLICATE' in st %}
                                     <span class="badge badge-dup">DUPLICATE</span>
                                 {% else %}
                                     <span class="badge badge-skipped">{{ st }}</span>
@@ -305,7 +305,10 @@ def get_stats():
             with open(tracker_path, mode="r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 records = list(reader)
-                simulated = sum(1 for r in records if r.get("Status") == "SIMULATED" or r.get("Sent") == "True")
+                simulated = sum(
+                    1 for r in records
+                    if r.get("Sending Status") == "SIMULATED" or r.get("Status") == "SIMULATED" or r.get("Sent") == "True"
+                )
         except Exception:
             pass
 

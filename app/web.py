@@ -1,6 +1,8 @@
-﻿import os
+import os
 import csv
 import logging
+import threading
+import time
 from pathlib import Path
 from flask import Flask, render_template_string, jsonify, send_from_directory, request
 from app.config import Config
@@ -10,6 +12,16 @@ from app.db import DatabaseManager
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Global background worker state
+pipeline_state = {
+    "status": "idle",  # "idle", "running", "completed", "failed"
+    "progress": "",
+    "summary": None,
+    "error": None,
+    "start_time": None
+}
+pipeline_lock = threading.Lock()
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -166,6 +178,56 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
+        let pollInterval = null;
+
+        function updateStatusUI(data) {
+            const btn = document.getElementById('runBtn');
+            const btnText = document.getElementById('btnText');
+            const statusBox = document.getElementById('statusBox');
+
+            if (data.status === 'running') {
+                btn.classList.add('btn-disabled');
+                btn.disabled = true;
+                btnText.innerHTML = '<span class="spinner"></span> Running Pipeline...';
+                statusBox.className = 'status-box active status-info';
+                statusBox.innerHTML = '⏳ <strong>Pipeline Running:</strong> ' + (data.progress || 'Executing discovery, enrichment, filtering, AI personalization, and outreach simulation...');
+            } else if (data.status === 'completed') {
+                if (pollInterval) clearInterval(pollInterval);
+                statusBox.className = 'status-box active status-success';
+                const s = data.summary || {};
+                statusBox.innerHTML = '✅ <strong>Pipeline Complete!</strong> Discovered: ' + (s.discovered_count || 0) + ' | Qualified: ' + (s.qualified_count || 0) + ' | Simulated Sends: ' + (s.simulated_send_count || 0) + '. Reloading page...';
+                btn.classList.remove('btn-disabled');
+                btn.disabled = false;
+                btnText.innerHTML = '▶ Run Outreach Pipeline';
+                setTimeout(() => window.location.reload(), 2500);
+            } else if (data.status === 'failed') {
+                if (pollInterval) clearInterval(pollInterval);
+                statusBox.className = 'status-box active status-error';
+                statusBox.innerHTML = '❌ <strong>Pipeline Error:</strong> ' + (data.error || 'Execution failed.');
+                btn.classList.remove('btn-disabled');
+                btn.disabled = false;
+                btnText.innerHTML = '▶ Run Outreach Pipeline';
+            }
+        }
+
+        function pollStatus() {
+            fetch('/pipeline-status')
+                .then(async res => {
+                    const text = await res.text();
+                    try {
+                        return JSON.parse(text);
+                    } catch(e) {
+                        throw new Error("Server response error (" + res.status + "): " + text.substring(0, 100));
+                    }
+                })
+                .then(data => {
+                    updateStatusUI(data);
+                })
+                .catch(err => {
+                    console.error("Polling status error:", err);
+                });
+        }
+
         function runPipeline() {
             const btn = document.getElementById('runBtn');
             const btnText = document.getElementById('btnText');
@@ -173,21 +235,29 @@ HTML_TEMPLATE = """
 
             btn.classList.add('btn-disabled');
             btn.disabled = true;
-            btnText.innerHTML = '<span class="spinner"></span> Running Pipeline...';
+            btnText.innerHTML = '<span class="spinner"></span> Starting Pipeline...';
             
             statusBox.className = 'status-box active status-info';
-            statusBox.innerHTML = '⏳ Executing 7-stage discovery, enrichment, filtering, AI personalization, and outreach simulation... This may take 1-2 minutes.';
+            statusBox.innerHTML = '⏳ Initializing 7-stage outreach pipeline...';
 
             fetch('/run-pipeline', { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        statusBox.className = 'status-box active status-success';
-                        statusBox.innerHTML = '✅ <strong>Pipeline Complete!</strong> Discovered: ' + data.summary.discovered_count + ' | Qualified: ' + data.summary.qualified_count + ' | Simulated Sends: ' + data.summary.simulated_send_count + '. Reloading page...';
-                        setTimeout(() => window.location.reload(), 2500);
+                .then(async res => {
+                    const text = await res.text();
+                    let data = {};
+                    try {
+                        data = JSON.parse(text);
+                    } catch(e) {
+                        throw new Error("Server returned non-JSON response (Status " + res.status + "): " + text.substring(0, 150));
+                    }
+
+                    if (res.ok && data.success) {
+                        if (!pollInterval) {
+                            pollInterval = setInterval(pollStatus, 2500);
+                        }
+                        pollStatus();
                     } else {
                         statusBox.className = 'status-box active status-error';
-                        statusBox.innerHTML = '❌ <strong>Error:</strong> ' + data.error;
+                        statusBox.innerHTML = '❌ <strong>Error:</strong> ' + (data.error || 'Failed to start pipeline');
                         btn.classList.remove('btn-disabled');
                         btn.disabled = false;
                         btnText.innerHTML = '▶ Run Outreach Pipeline';
@@ -201,6 +271,10 @@ HTML_TEMPLATE = """
                     btnText.innerHTML = '▶ Run Outreach Pipeline';
                 });
         }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            pollStatus();
+        });
     </script>
 </body>
 </html>
@@ -253,15 +327,49 @@ def index():
     stats, records = get_stats()
     return render_template_string(HTML_TEMPLATE, stats=stats, records=records)
 
-@app.route("/run-pipeline", methods=["POST"])
-def run_pipeline():
+def _execute_pipeline():
+    global pipeline_state
     try:
+        if not Config.validate_youtube_key():
+            raise ValueError("YOUTUBE_API_KEY environment variable is missing on Render. Please configure YOUTUBE_API_KEY in Render Environment variables.")
+
         pipeline = Pipeline()
         summary = pipeline.run(target_discovery_count=Config.TARGET_DISCOVERY_COUNT)
-        return jsonify({"success": True, "summary": summary})
+        
+        with pipeline_lock:
+            pipeline_state["status"] = "completed"
+            pipeline_state["summary"] = summary
+            pipeline_state["progress"] = "Completed successfully"
     except Exception as e:
-        logger.error(f"Error running pipeline from web app: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.error(f"Error running pipeline in background: {e}", exc_info=True)
+        with pipeline_lock:
+            pipeline_state["status"] = "failed"
+            pipeline_state["error"] = str(e)
+
+@app.route("/run-pipeline", methods=["POST"])
+def run_pipeline():
+    global pipeline_state
+    with pipeline_lock:
+        if pipeline_state["status"] == "running":
+            return jsonify({"success": True, "message": "Pipeline is already running."})
+
+        if not Config.validate_youtube_key():
+            return jsonify({"success": False, "error": "YOUTUBE_API_KEY is missing. Please set your YOUTUBE_API_KEY in the Render Environment Variables tab."}), 400
+
+        pipeline_state["status"] = "running"
+        pipeline_state["error"] = None
+        pipeline_state["summary"] = None
+        pipeline_state["progress"] = "Executing discovery, enrichment, filtering, AI personalization, and outreach simulation..."
+        pipeline_state["start_time"] = time.time()
+
+    thread = threading.Thread(target=_execute_pipeline, daemon=True)
+    thread.start()
+    return jsonify({"success": True, "message": "Pipeline started."})
+
+@app.route("/pipeline-status", methods=["GET"])
+def pipeline_status():
+    with pipeline_lock:
+        return jsonify(pipeline_state)
 
 @app.route("/download/<filename>")
 def download_file(filename):

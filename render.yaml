@@ -1,10 +1,10 @@
-﻿services:
+services:
   - type: web
     name: edxso-ai-influencer-outreach
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app.web:app
+    startCommand: gunicorn --timeout 300 --workers 1 app.web:app
     envVars:
       - key: YOUTUBE_API_KEY
         sync: false

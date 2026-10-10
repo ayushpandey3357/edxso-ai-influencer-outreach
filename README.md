@@ -4,6 +4,14 @@
 
 ---
 
+## 🌐 Live Web Application
+
+> **Production URL:** [https://edxso-ai-influencer-outreach-1.onrender.com](https://edxso-ai-influencer-outreach-1.onrender.com)
+
+The system features a live production web dashboard deployed on Render with interactive controls, asynchronous background execution, real-time pipeline status polling, and instant CSV downloads.
+
+---
+
 ## Overview
 
 The **Automated Micro-Influencer Outreach System** is an end-to-end, modular Python application designed to discover, filter, enrich, personalize, simulate sending, and track outreach for micro-influencers in the **Technology / AI / Developer** niche. The system integrates the official YouTube Data API v3, LLM-based structured personalization (Gemini / OpenAI), SQLite database tracking, and programmatic safety controls.
